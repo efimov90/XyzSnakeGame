@@ -1,4 +1,4 @@
-﻿using System.Numerics;
+using System.Numerics;
 
 namespace SnakeGame;
 internal class Game
@@ -6,6 +6,7 @@ internal class Game
     private readonly TimeSpan _tickSpan = TimeSpan.FromSeconds(1);
     private readonly IInputReader _inputReader;
     private readonly IRenderer _renderer;
+
     private bool _running = false;
     private Vector2 _currentHeadDirection = Vector2.Zero;
     private Vector2 _currentHeadPosition = new Vector2(5, 5);
@@ -56,7 +57,11 @@ internal class Game
     {
         _inputReader.Update();
 
+        _renderer.EraseAt(_currentHeadPosition);
+
         _currentHeadPosition += _currentHeadDirection;
+
+        _renderer.DrawHeadAt(_currentHeadPosition);
 
         _renderer.RenderCoordinates(_currentHeadPosition);
     }
