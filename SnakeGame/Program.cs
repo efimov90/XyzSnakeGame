@@ -4,6 +4,7 @@ using SnakeGame;
 var serviceProvider = new ServiceCollection()
     .AddSingleton<IInputReader, ConsoleInputReader>()
     .AddSingleton<IRenderer, ConsoleRenderer>()
+    .AddSingleton<ShowTextState>()
     .AddSingleton<Game>()
     .BuildServiceProvider();
 

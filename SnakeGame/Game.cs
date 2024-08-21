@@ -3,32 +3,56 @@ using System.Numerics;
 namespace SnakeGame;
 internal class Game
 {
-    private readonly TimeSpan _tickSpan = TimeSpan.FromSeconds(1);
+    private readonly Random _random = new();
     private readonly IInputReader _inputReader;
     private readonly IRenderer _renderer;
+    private readonly ShowTextState _showTextState;
+    private double _tickSeconds = 1d;
+    private double _secondsFromLastUpdate = 0d;
 
+    private DateTime _lastUpdateTime = DateTime.Now;
     private bool _running = false;
-    private Vector2 _currentHeadDirection = Vector2.Zero;
-    private Vector2 _currentHeadPosition = new Vector2(5, 5);
+    private Snake _snake = new(5, 5);
+    private Vector2 _currentApplePosition;
+    private int _currentAppleMaxX = 10;
+    private int _currentAppleMaxY = 10;
 
-    public Game(IInputReader inputReader, IRenderer renderer)
+    private int _appleEaten = 0;
+    private int _applesToNextLevel = 10;
+
+    private double _levelTickModifier = 0.1d;
+    private int _levelApplesToNextLevelModifier = 2;
+
+    private int _level = 1;
+
+    public Game(IInputReader inputReader, IRenderer renderer, ShowTextState showTextState)
     {
         _inputReader = inputReader ?? throw new ArgumentNullException(nameof(inputReader));
         _renderer = renderer ?? throw new ArgumentNullException(nameof(renderer));
-
+        _showTextState = showTextState ?? throw new ArgumentNullException(nameof(showTextState));
         _inputReader.InputActionCalled += OnInputActionCalled;
     }
 
     public async Task RunAsync()
     {
         _running = true;
+        _renderer.RenderWalls(_currentAppleMaxX + 2, _currentAppleMaxY + 2);
+        CreateApple();
 
         while (_running)
         {
-            Update();
+            var currentTime = DateTime.Now;
 
-            await Task.Delay(_tickSpan);
+            var deltaTime = currentTime - _lastUpdateTime;
+
+            Update(deltaTime.TotalSeconds);
+
+            _lastUpdateTime = currentTime;
         }
+
+        _showTextState.RenderGameOverScreen(_level, _appleEaten, _snake.Length);
+
+        await Task.CompletedTask;
     }
 
     private void OnInputActionCalled(object? sender, InputEventArgs e)
@@ -36,16 +60,16 @@ internal class Game
         switch (e.InputAction)
         {
             case InputAction.Up:
-                _currentHeadDirection = new Vector2(0, -1);
+                _snake.SetDirection(0, -1);
                 break;
             case InputAction.Down:
-                _currentHeadDirection = new Vector2(0, 1);
+                _snake.SetDirection(0, 1);
                 break;
             case InputAction.Left:
-                _currentHeadDirection = new Vector2(-1, 0);
+                _snake.SetDirection(-1, 0);
                 break;
             case InputAction.Right:
-                _currentHeadDirection = new Vector2(1, 0);
+                _snake.SetDirection(1, 0);
                 break;
             case InputAction.Exit:
                 _running = false;
@@ -53,16 +77,64 @@ internal class Game
         }
     }
 
-    private void Update()
+    private void Update(double totalSeconds)
     {
+        _secondsFromLastUpdate += totalSeconds;
+
+        if (_secondsFromLastUpdate < _tickSeconds)
+        {
+            return;
+        }
+
         _inputReader.Update();
 
-        _renderer.EraseAt(_currentHeadPosition);
+        if (_currentApplePosition == _snake.NextHeadPosition)
+        {
+            _snake.EatApple(_currentApplePosition);
+            _appleEaten++;
 
-        _currentHeadPosition += _currentHeadDirection;
+            if (_appleEaten == _applesToNextLevel)
+            {
+                LevelUp();
+            }
 
-        _renderer.DrawHeadAt(_currentHeadPosition);
+            CreateApple();
+        }
+        else if (_snake.NextHeadPosition.X == 0
+            || _snake.NextHeadPosition.Y == 0
+            || _snake.NextHeadPosition.X == _currentAppleMaxX + 1
+            || _snake.NextHeadPosition.Y == _currentAppleMaxY + 1
+            || _snake.IsInsideButNotHead(_snake.NextHeadPosition))
+        {
+            _running = false;
+        }
+        else
+        {
+            _renderer.EraseAt(_snake.Move());
+        }
 
-        _renderer.RenderCoordinates(_currentHeadPosition);
+        _renderer.DrawHeadAt(_snake.CurrentHeadPosition);
+
+        _renderer.RenderGameInfo(_level, _appleEaten, _applesToNextLevel);
+
+        _secondsFromLastUpdate = 0;
+    }
+
+    private void LevelUp()
+    {
+        _level++;
+        _appleEaten = 0;
+        _applesToNextLevel += _levelApplesToNextLevelModifier;
+        _tickSeconds -= _tickSeconds * _levelTickModifier;
+    }
+
+    private void CreateApple()
+    {
+        while (_snake.IsInside(_currentApplePosition) || _currentApplePosition == Vector2.Zero)
+        {
+            _currentApplePosition = new Vector2(_random.Next(1, _currentAppleMaxX + 1), _random.Next(1, _currentAppleMaxY + 1));
+        }
+
+        _renderer.DrawApple(_currentApplePosition);
     }
 }
